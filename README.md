@@ -25,21 +25,61 @@ Every one of those is written down here, with the measurement that revealed it.
 
 ## Install
 
-```bash
-# project-scoped
-npx opencode-skill-creator install --project   # for the skill creator itself
+### npx (no clone, no build)
 
-# this skill
-git clone https://github.com/rotteng749-lgtm/mlbb-panxcz-skill ~/.config/opencode/skills/mlbb-panxcz
+```bash
+# every project, for the current user
+npx mlbb-panxcz-skill install --global
+
+# just this repo
+npx mlbb-panxcz-skill install --project
+
+# somewhere else entirely
+npx mlbb-panxcz-skill install --dir /path/to/skills
 ```
 
-Or symlink it during development:
+Other commands:
 
 ```bash
+npx mlbb-panxcz-skill path --global     # print the resolved target, install nothing
+npx mlbb-panxcz-skill uninstall --global
+npx mlbb-panxcz-skill --version
+npx mlbb-panxcz-skill --help
+```
+
+Installing from a local checkout or tarball (how the package itself was tested —
+`npx <tarball>` does **not** work, it tries to exec the archive; `--package`
+tells npx which binary to run):
+
+```bash
+npm pack                                   # -> mlbb-panxcz-skill-0.1.0.tgz
+npx --package ./mlbb-panxcz-skill-0.1.0.tgz mlbb-panxcz-skill install --global
+```
+
+### git / manual
+
+```bash
+git clone https://github.com/rotteng749-lgtm/mlbb-panxcz-skill ~/.config/opencode/skills/mlbb-panxcz
+# or, while developing, symlink so edits take effect immediately:
 ln -s "$PWD" ~/.config/opencode/skills/mlbb-panxcz
 ```
 
-Restart OpenCode after installing.
+**Restart OpenCode after installing** — skills are discovered at startup.
+
+### What the installer guarantees
+
+- The user-level target is `$XDG_CONFIG_HOME/opencode/skills/` when that is
+  set, otherwise `~/.config/opencode/skills/`. Hardcoding `~/.config` installs
+  into a directory OpenCode never reads.
+- An existing install is **renamed to `<name>.bak-<timestamp>`**, not
+  overwritten. Your edited `SKILL.md` survives an upgrade.
+- After copying, it verifies `SKILL.md` exists *and* has YAML frontmatter, and
+  reports the resolved path. An install that silently landed in the wrong
+  directory shows up much later as "the skill never triggers".
+- Zero dependencies and no network access at install time.
+
+Options: `--global` / `--project` / `--dir <p>`, `-f/--force` to overwrite
+without a backup, `-h/--help`.
 
 ## What it triggers on
 
@@ -79,9 +119,22 @@ skill_eval(evalSetPath=".../eval/eval_set.json",
 `eval/eval_set.json` is intentionally left un-run: shipping it ready means the
 trigger can be measured later without rewriting queries.
 
+## Install via npm
+
+The package is ready but **not yet published** to the npm registry (the
+publishing account isn't authenticated on this machine). To publish:
+
+```bash
+npm adduser                # or: npm login
+npm publish                 # from this directory
+```
+
+Then `npx mlbb-panxcz-skill install --global` works from the registry.
+
 ## Status
 
-Skill structure validated. Trigger accuracy and workflow output quality are not
+Skill structure validated. Installer verified end-to-end against a local
+tarball: install, post-install verification, uninstall, and backup-on-conflict. Trigger accuracy and workflow output quality are not
 yet benchmarked — the eval set is provided so that is a one-command follow-up.
 
 ## License

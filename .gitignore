@@ -1,5 +1,6 @@
 target/
 node_modules/
 *.zip
+*.tgz
 *.log
 .DS_Store

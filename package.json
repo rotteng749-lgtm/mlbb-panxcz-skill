@@ -1,0 +1,45 @@
+{
+  "name": "mlbb-panxcz-skill",
+  "version": "0.1.0",
+  "description": "OpenCode skill: playbook for building, extending, porting and debugging Mobile Legends (MLBB) external overlay tools",
+  "keywords": [
+    "opencode",
+    "opencode-skill",
+    "mlbb",
+    "mobile-legends",
+    "il2cpp",
+    "android",
+    "ndk",
+    "overlay",
+    "imGui"
+  ],
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "mlbb-panxcz-skill": "bin/install.mjs"
+  },
+  "exports": {
+    ".": "./SKILL.md",
+    "./references/*": "./references/*",
+    "./eval": "./eval/eval_set.json"
+  },
+  "files": [
+    "bin/",
+    "SKILL.md",
+    "references/",
+    "eval/",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rotteng749-lgtm/mlbb-panxcz-skill.git"
+  },
+  "homepage": "https://github.com/rotteng749-lgtm/mlbb-panxcz-skill#readme",
+  "bugs": {
+    "url": "https://github.com/rotteng749-lgtm/mlbb-panxcz-skill/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
