@@ -1,58 +1,71 @@
 #!/usr/bin/env node
 // ============================================================================
-//  mlbb-panxcz-skill installer
+//  Skill installer (generic)
 // ---------------------------------------------------------------------------
-//  Copies the bundled skill into an OpenCode skills directory.
+//  Copies the bundled skill into an OpenCode skills directory. The skill name
+//  is read from SKILL.md frontmatter, so the same installer works for any skill
+//  in this repo family -- no hardcoded name to drift out of sync.
 //
-//    npx mlbb-panxcz-skill install --global     # every project for this user
-//    npx mlbb-panxcz-skill install --project    # .opencode/skills/ in cwd
-//    npx mlbb-panxcz-skill install --dir <path> # somewhere else
-//    npx mlbb-panxcz-skill path --global        # print the target, install nothing
-//    npx mlbb-panxcz-skill uninstall --global
+//    npx <pkg> install --global     # every project for this user
+//    npx <pkg> install --project    # .opencode/skills/ in cwd
+//    npx <pkg> install --dir <path> # somewhere else
+//    npx <pkg> path --global        # print the target, install nothing
+//    npx <pkg> uninstall --global
 //
-//  Design notes (learned from having to install one of these):
+//  Design notes (each of these is a failure mode someone actually hit):
 //
 //  * The USER-level skills dir is $XDG_CONFIG_HOME/opencode/skills when that is
-//    set, and ~/.config/opencode/skills otherwise. Honour XDG_CONFIG_HOME --
-//    hardcoding ~/.config is the classic way to install into a directory the
-//    app never reads.
+//    set, and ~/.config/opencode/skills otherwise. Honouring XDG_CONFIG_HOME is
+//    not a nicety: hardcoding ~/.config installs into a directory OpenCode
+//    never reads, and the symptom is "the skill never triggers", discovered
+//    much later.
 //
-//  * Never clobber silently. If a skill of the same name already exists and
-//    differs, the old copy is renamed to <name>.bak-<timestamp> first. Losing
-//    someone's edited SKILL.md without a trace is the worst failure mode here,
-//    because it is discovered long after the fact.
+//  * Never clobber silently. An existing install is renamed to
+//    <name>.bak-<timestamp>. Losing a hand-edited SKILL.md without a trace is
+//    the worst thing this script could do.
 //
-//  * Verify the payload after copying. A "skill installed" message that points
-//    at a directory with no SKILL.md is worse than a hard error, because OpenCode
-//    then starts fine and the skill simply never triggers.
+//  * Verify the payload after copying. "Installed" pointing at a directory with
+//    no SKILL.md, or with a SKILL.md that has no frontmatter, is worse than a
+//    hard error: OpenCode starts fine and the feature is simply absent.
+//
+//  * Explicit payload allowlist. A stray dev file in the package must not
+//    become part of the installed skill -- OpenCode loads whatever is there.
 //
 //  * No dependencies, no network. If this script can run, the skill is there.
 // ============================================================================
 
 import {
   cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync,
-  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const SKILL_NAME = "mlbb-panxcz";
-const PKG = "mlbb-panxcz-skill";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
 
-// Only these get copied. A stray dev file in the package must not become part
-// of the installed skill (OpenCode loads whatever is under the skill dir).
-const PAYLOAD = ["SKILL.md", "references", "eval"];
-
-function version() {
+const pkgMeta = (() => {
   try {
-    return JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version ?? "?";
+    return JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   } catch {
-    return "?";
+    return {};
   }
-}
+})();
+const PKG = pkgMeta.name ?? "skill";
+const VERSION = pkgMeta.version ?? "?";
+
+// Skill name comes from the frontmatter; fall back to the package name so a
+// broken checkout still installs to *something* predictable.
+const SKILL_NAME = (() => {
+  try {
+    const m = readFileSync(join(ROOT, "SKILL.md"), "utf8").match(/^name:\s*(.+)$/m);
+    return m ? m[1].trim().replace(/^["']|["']$/g, "") : PKG;
+  } catch {
+    return PKG;
+  }
+})();
+
+const PAYLOAD = ["SKILL.md", "references", "eval"];
 
 function userSkillsDir() {
   const xdg = process.env.XDG_CONFIG_HOME;
@@ -80,9 +93,9 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  return `mlbb-panxcz-skill v${version()}
+  return `${PKG} v${VERSION}
 
-  Install the "${SKILL_NAME}" OpenCode skill (MLBB external overlay playbook).
+  Install the "${SKILL_NAME}" OpenCode skill.
 
   Usage
     ${PKG} install --global      install for the current user, all projects
@@ -96,8 +109,7 @@ function usage() {
     -g, --global     user-level skills dir ($XDG_CONFIG_HOME/opencode/skills,
                      else ~/.config/opencode/skills)
     -p, --project    <cwd>/.opencode/skills
-        --dir <p>    explicit destination (parent dir; the skill is created
-                     inside it)
+        --dir <p>    explicit destination (the skill dir is created inside it)
     -f, --force      overwrite an existing skill without making a backup
     -h, --help       this text
 
@@ -136,11 +148,8 @@ function install(dest, force) {
   if (bak) console.log(`[*] existing skill moved aside: ${bak}`);
 
   mkdirSync(dest, { recursive: true });
-  for (const f of PAYLOAD) {
-    cpSync(join(ROOT, f), join(dest, f), { recursive: true });
-  }
+  for (const f of PAYLOAD) cpSync(join(ROOT, f), join(dest, f), { recursive: true });
 
-  // Verify what landed, not what we intended.
   const skillMd = join(dest, "SKILL.md");
   if (!existsSync(skillMd)) {
     console.error(`[x] install finished but ${skillMd} is missing -- OpenCode will not see this skill.`);
@@ -151,11 +160,17 @@ function install(dest, force) {
     console.error("[x] SKILL.md has no YAML frontmatter -- OpenCode will ignore the skill.");
     process.exit(1);
   }
-  const refs = existsSync(join(dest, "references")) ? statSync(join(dest, "references")).isDirectory() : false;
-  console.log(`[ok] ${SKILL_NAME} v${version()}`);
+  if (text.length < 200) {
+    console.error("[x] SKILL.md looks truncated -- refusing to report success.");
+    process.exit(1);
+  }
+  const refsOk = existsSync(join(dest, "references"))
+    && statSync(join(dest, "references")).isDirectory();
+
+  console.log(`[ok] ${SKILL_NAME} v${VERSION}`);
   console.log(`     -> ${dest}`);
-  console.log(`     references/: ${refs ? "ok" : "MISSING (prose fallback only)"}`);
-  console.log("     Restart OpenCode, then ask about MLBB / il2cpp offsets / touch injection.");
+  console.log(`     references/: ${refsOk ? "ok" : "MISSING (prose fallback only)"}`);
+  console.log("     Restart OpenCode to pick it up.");
 }
 
 function uninstall(dest) {
@@ -173,7 +188,7 @@ if (args.help) {
   process.exit(0);
 }
 if (args.cmd === "version") {
-  console.log(version());
+  console.log(VERSION);
   process.exit(0);
 }
 
